@@ -35,6 +35,29 @@ jobs:
           fi
           echo "publishing $POM_VERSION"
 
+      # A bad token used to surface as a 401 buried in a Maven stack trace, after the whole
+      # build had already run. Check it first, and say which half looks wrong.
+      - name: Check the Central credentials
+        env:
+          CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+        run: |
+          if [ -z "$CENTRAL_TOKEN_USERNAME" ] || [ -z "$CENTRAL_TOKEN_PASSWORD" ]; then
+            echo "::error::CENTRAL_TOKEN_USERNAME or CENTRAL_TOKEN_PASSWORD is not set"
+            exit 1
+          fi
+          AUTH=$(printf '%s:%s' "$CENTRAL_TOKEN_USERNAME" "$CENTRAL_TOKEN_PASSWORD" | base64 -w0)
+          STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $AUTH" \
+            "https://central.sonatype.com/api/v1/publisher/published?namespace=com.luigivismara&name=jev-sdk-java&version=${GITHUB_REF_NAME#v}")
+          if [ "$STATUS" = "401" ] || [ "$STATUS" = "403" ]; then
+            echo "::error::Central rejected the token (HTTP $STATUS)."
+            echo "::error::The Portal shows a short username and a long password - check they did not get swapped, and that the token has not been revoked."
+            echo "username length: ${#CENTRAL_TOKEN_USERNAME}, password length: ${#CENTRAL_TOKEN_PASSWORD}"
+            exit 1
+          fi
+          echo "Central accepted the token (HTTP $STATUS)"
+
       - name: Test before publishing
         run: mvn -B verify
 
