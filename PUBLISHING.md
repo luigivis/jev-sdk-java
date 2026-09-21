@@ -6,9 +6,18 @@ one inside the runner from four repository secrets.
 
 ## One-time setup
 
-Add four secrets under **Settings → Secrets and variables → Actions → New repository secret**, or
-with `gh` from the machine that already holds your signing key. Piping from a file keeps the values
-out of your shell history:
+Run this once, **on the machine that holds your GPG signing key**:
+
+```bash
+./scripts/setup-secrets.sh
+```
+
+It finds the key, exports it straight down a pipe to `gh` without writing it to disk, prompts for
+the three remaining values without echoing them, and prints what ended up configured. Nothing lands
+in your shell history or on screen.
+
+If you would rather do it by hand, the four secrets go under **Settings → Secrets and variables →
+Actions → New repository secret**:
 
 | Secret | What it is |
 |---|---|
@@ -20,14 +29,15 @@ out of your shell history:
 ### The signing key
 
 You already have one — it signed the other packages under
-[`com.luigivismara`](https://central.sonatype.com/namespace/com.luigivismara). On that machine:
+[`com.luigivismara`](https://central.sonatype.com/namespace/com.luigivismara). It is not on every
+machine, so run the script where it lives. By hand:
 
 ```bash
 gpg --list-secret-keys --keyid-format=long          # find the key id
-gpg --armor --export-secret-keys <KEY_ID> > jev-signing-key.asc
-gh secret set MAVEN_GPG_PRIVATE_KEY --repo luigivis/jev-sdk-java < jev-signing-key.asc
-rm jev-signing-key.asc                               # do not leave it lying around
+gpg --armor --export-secret-keys <KEY_ID> | gh secret set MAVEN_GPG_PRIVATE_KEY --repo luigivis/jev-sdk-java
 ```
+
+Pipe it — do not write the key to a file you then have to remember to delete.
 
 The public half must be on a keyserver for Central to verify the signature. It already is if the
 other packages published successfully; if not:
@@ -48,6 +58,9 @@ gh secret set MAVEN_GPG_PASSPHRASE   --repo luigivis/jev-sdk-java
 ```
 
 Each prompts for the value and reads it without echoing.
+
+A token pasted into a chat, an issue or a commit is a leaked token: revoke it in the Portal and
+generate a new one rather than reusing it.
 
 ## Cutting a release
 
