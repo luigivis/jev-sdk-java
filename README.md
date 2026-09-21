@@ -558,6 +558,10 @@ Deliberately not included:
 
 Each of these is a ten-line addition if a real need shows up. Open an issue.
 
+## Releasing
+
+Cut by GitHub Actions on a tag; see [PUBLISHING.md](PUBLISHING.md).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
