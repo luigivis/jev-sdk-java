@@ -69,11 +69,17 @@ Generate it at [central.sonatype.com](https://central.sonatype.com) → your acc
 User Token**. It prints a `<username>` and `<password>` pair once.
 
 ```bash
-gh secret set CENTRAL_TOKEN_USERNAME --repo luigivis/jev-sdk-java
-gh secret set CENTRAL_TOKEN_PASSWORD --repo luigivis/jev-sdk-java
+./scripts/set-central-token.sh
 ```
 
-Each prompts for the value and reads it without echoing.
+It prompts for both halves, checks them against the Portal, and only writes them to GitHub if
+they authenticate — so a bad token fails in two seconds here instead of after a full release
+build.
+
+**Both halves must come from the same token.** Generating a new one changes the username *and*
+the password; replacing only one leaves a pair that can never authenticate, which looks exactly
+like a revoked token. The Portal prints a short username and a long password — if yours are the
+other way round, they got swapped.
 
 A token pasted into a chat, an issue or a commit is a leaked token: revoke it in the Portal and
 generate a new one rather than reusing it.
