@@ -26,18 +26,35 @@ Actions → New repository secret**:
 | `CENTRAL_TOKEN_USERNAME` | User token name from the Central Portal |
 | `CENTRAL_TOKEN_PASSWORD` | User token password from the Central Portal |
 
-### The signing key
+### The signing key — already done
 
-You already have one — it signed the other packages under
-[`com.luigivismara`](https://central.sonatype.com/namespace/com.luigivismara). It is not on every
-machine, so run the script where it lives. By hand:
+A dedicated RSA 4096 key was generated for this project and is already loaded:
 
-```bash
-gpg --list-secret-keys --keyid-format=long          # find the key id
-gpg --armor --export-secret-keys <KEY_ID> | gh secret set MAVEN_GPG_PRIVATE_KEY --repo luigivis/jev-sdk-java
+```
+D7D2D7C2A13E3D8D
+6AE0F072A240AD6EA7EB8905D7D2D7C2A13E3D8D
+Luigi Vismara (Maven Central signing key) <luigi@envi.lat>
 ```
 
-Pipe it — do not write the key to a file you then have to remember to delete.
+`MAVEN_GPG_PRIVATE_KEY` and `MAVEN_GPG_PASSPHRASE` are set, and the public half is on
+keyserver.ubuntu.com, keys.openpgp.org and pgp.mit.edu so Central can verify the signatures.
+
+The key has **no passphrase**, which is the usual shape for a key that only ever signs in CI:
+its security is the GitHub secret, not a phrase, and there is no passphrase to leak or lose.
+`MAVEN_GPG_PASSPHRASE` is set to an empty string to match.
+
+It is a project-specific key, separate from whatever signed the earlier `com.luigivismara`
+packages. If it is ever exposed, revoke it and generate a new one — nothing else depends on it:
+
+```bash
+gpg --gen-revoke D7D2D7C2A13E3D8D | gpg --keyserver keyserver.ubuntu.com --send-keys
+```
+
+The revocation certificate generated alongside the key lives in
+`~/.gnupg/openpgp-revocs.d/6AE0F072A240AD6EA7EB8905D7D2D7C2A13E3D8D.rev`. Keep it somewhere you
+can still reach if the private key is lost.
+
+To recreate the same setup elsewhere, `./scripts/setup-secrets.sh` finds the key and loads it.
 
 The public half must be on a keyserver for Central to verify the signature. It already is if the
 other packages published successfully; if not:
@@ -46,7 +63,7 @@ other packages published successfully; if not:
 gpg --keyserver keyserver.ubuntu.com --send-keys <KEY_ID>
 ```
 
-### The Portal token
+### The Portal token — the only step left
 
 Generate it at [central.sonatype.com](https://central.sonatype.com) → your account → **Generate
 User Token**. It prints a `<username>` and `<password>` pair once.
@@ -54,7 +71,6 @@ User Token**. It prints a `<username>` and `<password>` pair once.
 ```bash
 gh secret set CENTRAL_TOKEN_USERNAME --repo luigivis/jev-sdk-java
 gh secret set CENTRAL_TOKEN_PASSWORD --repo luigivis/jev-sdk-java
-gh secret set MAVEN_GPG_PASSPHRASE   --repo luigivis/jev-sdk-java
 ```
 
 Each prompts for the value and reads it without echoing.
