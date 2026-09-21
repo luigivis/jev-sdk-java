@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -55,7 +56,7 @@ public final class JevClient implements AutoCloseable {
             throw new IllegalArgumentException("apiKey is required");
         }
         this.apiKey = builder.apiKey;
-        this.baseUrl = stripTrailingSlash(builder.baseUrl);
+        this.baseUrl = normalizeBaseUrl(builder.baseUrl);
         this.timeout = builder.timeout;
         this.maxRetries = builder.maxRetries;
         this.retryBackoff = builder.retryBackoff;
@@ -333,8 +334,38 @@ public final class JevClient implements AutoCloseable {
         return body.length() <= 500 ? body : body.substring(0, 500) + "...";
     }
 
-    private static String stripTrailingSlash(String url) {
-        return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
+    /**
+     * Validates the base URL up front, so a bad one fails where it was set rather than on the
+     * first request with a message that never mentions {@code baseUrl}.
+     */
+    private static String normalizeBaseUrl(String baseUrl) {
+        if (baseUrl == null || baseUrl.isBlank()) {
+            throw new IllegalArgumentException(
+                    "baseUrl is required, e.g. \"" + DEFAULT_BASE_URL + "\"");
+        }
+        String trimmed = baseUrl.strip();
+        URI uri;
+        try {
+            uri = new URI(trimmed);
+        } catch (URISyntaxException e) {
+            throw new IllegalArgumentException("baseUrl is not a valid URL: " + trimmed, e);
+        }
+        String scheme = uri.getScheme();
+        if (scheme == null || !("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))) {
+            // "localhost:8080" parses with scheme "localhost", which is never what was meant.
+            throw new IllegalArgumentException(
+                    "baseUrl needs an http:// or https:// scheme: " + trimmed);
+        }
+        if (uri.getHost() == null || uri.getHost().isBlank()) {
+            throw new IllegalArgumentException("baseUrl has no host: " + trimmed);
+        }
+        if (uri.getPort() == 0) {
+            // "http://localhost:" + port with an unassigned int gives port 0: a valid URI that
+            // can never be connected to. Catch it here rather than after every retry has failed.
+            throw new IllegalArgumentException(
+                    "baseUrl has port 0, which is never a real server; was the port set? " + trimmed);
+        }
+        return trimmed.endsWith("/") ? trimmed.substring(0, trimmed.length() - 1) : trimmed;
     }
 
     private record ModelList(List<ModelInfo> models) {
@@ -376,8 +407,20 @@ public final class JevClient implements AutoCloseable {
          *         .build();
          * }</pre>
          *
-         * @param baseUrl the API origin, with or without a trailing slash
+         * <p>Validated when the client is built, not when the first request goes out — so a port
+         * variable that was never assigned fails here, naming the problem, instead of looking
+         * valid and timing out later:
+         *
+         * <pre>{@code
+         * int port;                                  // 0
+         * .baseUrl("http://localhost:" + port)       // IllegalArgumentException: baseUrl has port 0
+         * }</pre>
+         *
+         * @param baseUrl the API origin, with or without a trailing slash; needs an
+         *                {@code http://} or {@code https://} scheme and a host
          * @return this builder
+         * @throws IllegalArgumentException when the client is built, if the URL is blank, has no
+         *                                  usable scheme or host, or has port 0
          */
         public Builder baseUrl(String baseUrl) {
             this.baseUrl = baseUrl;

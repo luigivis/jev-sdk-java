@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -335,6 +336,46 @@ class JevClientTest {
 
         assertTrue(e.getMessage().contains("after 2 attempt(s)"), e.getMessage());
         assertEquals(0, e.statusCode());
+    }
+
+    @Test
+    @DisplayName("a missing or malformed baseUrl is rejected at build time, not at first use")
+    void baseUrlValidation() {
+        JevClient.Builder builder = JevClient.builder().apiKey("k");
+
+        // Nothing at all.
+        assertTrue(assertThrows(IllegalArgumentException.class, () -> builder.baseUrl(null).build())
+                .getMessage().contains("baseUrl"));
+        assertThrows(IllegalArgumentException.class, () -> builder.baseUrl("").build());
+        assertThrows(IllegalArgumentException.class, () -> builder.baseUrl("   ").build());
+
+        // A host with no scheme, which URI happily parses as scheme "localhost".
+        assertTrue(assertThrows(IllegalArgumentException.class,
+                () -> builder.baseUrl("localhost:8080").build()).getMessage().contains("http"));
+        assertThrows(IllegalArgumentException.class, () -> builder.baseUrl("ftp://host/x").build());
+        assertThrows(IllegalArgumentException.class, () -> builder.baseUrl("http:///v1").build());
+    }
+
+    @Test
+    @DisplayName("an unset port is rejected, because http://host:0 parses as a valid URI")
+    void rejectsUnsetPort() {
+        int neverAssigned = 0;   // what an uninitialised int field gives you
+
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> JevClient.builder().apiKey("k")
+                        .baseUrl("http://localhost:" + neverAssigned).build());
+
+        assertTrue(e.getMessage().contains("port"), e.getMessage());
+    }
+
+    @Test
+    @DisplayName("valid base URLs are accepted, with or without a port or trailing slash")
+    void acceptsValidBaseUrls() {
+        for (String url : List.of("https://api.typesafe.ai", "https://api.typesafe.ai/",
+                "http://localhost:8080", "http://127.0.0.1:65535/", "https://gw.example.com/jev")) {
+            assertDoesNotThrow(() -> JevClient.builder().apiKey("k").baseUrl(url).build().close(),
+                    url);
+        }
     }
 
     @Test
