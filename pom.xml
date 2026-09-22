@@ -108,7 +108,9 @@
       <plugin>
         <groupId>org.sonatype.central</groupId>
         <artifactId>central-publishing-maven-plugin</artifactId>
-        <version>0.7.0</version>
+        <!-- 0.7.0 cannot parse the "warnings" field Central now returns and dies after a
+             successful upload; 0.11.0 knows about it. -->
+        <version>0.11.0</version>
         <extensions>true</extensions>
         <configuration>
           <publishingServerId>central</publishingServerId>
